@@ -37,7 +37,15 @@ app.get('/clientes/:id', async (req, res) => {
   const results = await db.selectById(id);
   console.log(results);
   res.json(results);
-})
+});
+
+//ROTEAMENTO PARA INSERIR
+app.post('/clientes', async (req, res) => {
+  const { nome, email, idade } = req.body;
+  const results = await db.insertCliente(nome, email, idade);
+  console.log(results);
+  res.json(results);
+});
 
 app.listen(port, () => {
     console.log(`Example app listening at http://localhost:${port}`);

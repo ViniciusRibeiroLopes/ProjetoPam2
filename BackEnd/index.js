@@ -1,133 +1,122 @@
-// index.js
-const express = require("express");
-const cors = require("cors");
-const methodOverride = require("method-override");
 const db = require("./conf/autenticacao.js");
-
+const express = require("express");
+let bodyParser = require("body-parser");
+let cors = require("cors");
+let methodOvirride = require("method-override");
 const app = express();
-const PORT = process.env.PORT || 3000;
+const port = 3000;
 
-// Middlewares
-app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Permite que você use verbos HTTP
+app.use(methodOvirride("X-HTTP-Method"));
+app.use(methodOvirride("X-HTTP-Method-Override"));
+app.use(methodOvirride("X-Method-Override"));
+app.use(methodOvirride("_method"));
 
-// Só use method-override se REALMENTE precisar enviar PUT/DELETE via formulário HTML
-app.use(methodOverride("X-HTTP-Method"));
-app.use(methodOverride("X-HTTP-Method-Override"));
-app.use(methodOverride("X-Method-Override"));
-app.use(methodOverride("_method"));
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+  res.header(
+    "Access-Control-Allow-Headers",
+    "Origin, X-Requested-With, Content-Type, Accept, Authorization"
+  );
 
-// ROTA RAIZ – lista todos
-app.get("/", async (req, res, next) => {
-  try {
-    const results = await db.selectFull();
-    res.json(results);
-  } catch (err) {
-    next(err);
+  // Handle preflight requests
+  if (req.method === "OPTIONS") {
+    res.sendStatus(200);
+  } else {
+    next();
   }
 });
 
-// BUSCAR POR ID
-app.get("/clientes/:id", async (req, res, next) => {
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: false }));
+
+//ROTEAMENTO RAIZ
+app.get("/", async (req, res) => {
+  const results = await db.selectFull();
+  console.log(results);
+  res.json(results);
+});
+
+// ROTEAMENTO PARA BUSCAR PELO ID
+app.get("/clientes/:id", async (req, res) => {
   try {
-    const id = Number(req.params.id);
-    if (Number.isNaN(id)) return res.status(400).json({ error: "ID inválido" });
+    const id = req.params.id;
+
+    // Validação básica do ID
+    if (!id || isNaN(id)) {
+      return res.status(400).json({
+        error: "ID inválido. Deve ser um número.",
+      });
+    }
 
     const results = await db.selectById(id);
-    if (!results || (Array.isArray(results) && results.length === 0)) {
-      return res.status(404).json({ error: "Cliente não encontrado" });
+    console.log(results);
+
+    // Verifica se encontrou o cliente
+    if (!results || results.length === 0) {
+      return res.status(404).json({
+        error: "Cliente não encontrado.",
+      });
     }
+
     res.json(results);
-  } catch (err) {
-    next(err);
+  } catch (error) {
+    console.error("Erro ao buscar cliente:", error);
+    res.status(500).json({
+      error: "Erro interno do servidor.",
+    });
   }
 });
 
-// INSERIR
-app.post("/clientes", async (req, res, next) => {
+// ROTEAMENTO PARA INSERIR
+app.post("/clientes/", async (req, res) => {
+  const Nome = req.body.Nome;
+  const Idade = req.body.Idade;
+  const UF = req.body.UF;
+  //const { Nome, Idade, UF } = req.body;
+  const results = await db.insertCliente(Nome, Idade, UF);
+  console.log(results);
+  res.json(results);
+});
+
+// ROTEAMENTO PARA ATUALIZAR
+// ROTEAMENTO PARA ATUALIZAR
+app.put("/clientes/:id", async (req, res) => {
+  const id = req.params.id;
+  const Nome = req.body.Nome;
+  const Idade = req.body.Idade;
+  const UF = req.body.UF;
+
+  console.log("PUT - ID recebido:", id);
+  console.log("PUT - Dados recebidos:", { Nome, Idade, UF });
+
   try {
-    const { Nome, Idade, UF } = req.body;
-
-    if (!Nome || !Idade || !UF) {
-      return res
-        .status(400)
-        .json({ error: "Nome, Idade e UF são obrigatórios." });
-    }
-    const idadeNum = Number(Idade);
-    if (!Number.isInteger(idadeNum) || idadeNum <= 0) {
-      return res
-        .status(400)
-        .json({ error: "Idade deve ser número inteiro positivo." });
-    }
-
-    const inserted = await db.insertCliente(
-      String(Nome).trim(),
-      idadeNum,
-      String(UF).trim().toUpperCase()
-    );
-    // Ideal: db.insertCliente retorna o registro criado (com id)
-    res.status(201).json(inserted);
-  } catch (err) {
-    next(err);
+    const results = await db.updateCliente(Nome, Idade, UF, id);
+    console.log("PUT - Resultado:", results);
+    res.json(results);
+  } catch (error) {
+    console.error("PUT - Erro:", error);
+    res.status(500).json({ error: "Erro ao atualizar cliente" });
   }
 });
 
-// ATUALIZAR
-app.put("/clientes/:id", async (req, res, next) => {
+//DELETAR PELO ID
+app.delete("/clientes/:id", async (req, res) => {
+  const id = req.params.id;
+
+  console.log("DELETE - ID recebido:", id);
+
   try {
-    const id = Number(req.params.id);
-    if (Number.isNaN(id)) return res.status(400).json({ error: "ID inválido" });
-
-    const { Nome, Idade, UF } = req.body;
-    if (!Nome || !Idade || !UF) {
-      return res
-        .status(400)
-        .json({ error: "Nome, Idade e UF são obrigatórios." });
-    }
-    const idadeNum = Number(Idade);
-    if (!Number.isInteger(idadeNum) || idadeNum <= 0) {
-      return res
-        .status(400)
-        .json({ error: "Idade deve ser número inteiro positivo." });
-    }
-
-    const updated = await db.updateCliente(
-      String(Nome).trim(),
-      idadeNum,
-      String(UF).trim().toUpperCase(),
-      id
-    );
-    res.json(updated);
-  } catch (err) {
-    next(err);
+    const results = await db.deleteById(id);
+    console.log("DELETE - Resultado:", results);
+    res.json(results);
+  } catch (error) {
+    console.error("DELETE - Erro:", error);
+    res.status(500).json({ error: "Erro ao deletar cliente" });
   }
 });
 
-// DELETAR
-app.delete("/clientes/:id", async (req, res, next) => {
-  try {
-    const id = Number(req.params.id);
-    if (Number.isNaN(id)) return res.status(400).json({ error: "ID inválido" });
-
-    const result = await db.deleteById(id);
-    res.json({ success: true, result });
-  } catch (err) {
-    next(err);
-  }
-});
-
-// 404 para rotas não mapeadas
-app.use((req, res) => {
-  res.status(404).json({ error: "Rota não encontrada" });
-});
-
-// Handler global de erros
-app.use((err, req, res, next) => {
-  console.error("[API ERROR]", err);
-  res.status(500).json({ error: "Erro interno do servidor" });
-});
-
-app.listen(PORT, () => {
-  console.log(`API ouvindo em http://localhost:${PORT}`);
+app.listen(port, () => {
+  console.log(`Example app listening at http://localhost:${port}`);
 });
